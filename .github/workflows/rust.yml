@@ -18,7 +18,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: rustup update
     - run: cargo fmt --all --check
 
@@ -28,7 +28,7 @@ jobs:
         rust: [msrv, latest]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: stellar/actions/rust-cache@main
     - name: Use the minimum supported Rust version
       if: matrix.rust == 'msrv'
@@ -49,7 +49,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: stellar/actions/rust-cache@main
     - run: rustup update
     - run: cargo doc

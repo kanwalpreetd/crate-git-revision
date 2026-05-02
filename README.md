@@ -20,11 +20,17 @@ For example, for a clean worktree:
 1a2b3c4d5e6f7890abcdef1234567890abcdef12
 ```
 
-For example, suffixed with `-dirty` when a worktree contains changes:
+For example, suffixed with `-dirty` when a worktree contains changes or
+untracked files:
 
 ```text
 1a2b3c4d5e6f7890abcdef1234567890abcdef12-dirty
 ```
+
+The dirty check uses `git status --porcelain`, which also reports submodule
+state changes. Crates that vendor submodules may produce `-dirty` builds
+where they did not previously when the submodule's working tree differs
+from its recorded commit.
 
 Requires the use of a build.rs build script. See [Build Scripts]() for more
 details on how Rust build scripts work.

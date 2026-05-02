@@ -18,11 +18,17 @@
 //! 1a2b3c4d5e6f7890abcdef1234567890abcdef12
 //! ```
 //!
-//! For example, suffixed with `-dirty` when a worktree contains changes:
+//! For example, suffixed with `-dirty` when a worktree contains changes or
+//! untracked files:
 //!
 //! ```text
 //! 1a2b3c4d5e6f7890abcdef1234567890abcdef12-dirty
 //! ```
+//!
+//! The dirty check uses `git status --porcelain`, which also reports
+//! submodule state changes. Crates that vendor submodules may produce
+//! `-dirty` builds where they did not previously when the submodule's
+//! working tree differs from its recorded commit.
 //!
 //! Requires the use of a build.rs build script. See [Build Scripts]() for more
 //! details on how Rust build scripts work.
@@ -110,12 +116,8 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
 
                 match Command::new("git")
                     .current_dir(current_dir)
-                    .arg("describe")
-                    .arg("--always")
-                    .arg("--exclude=*")
-                    .arg("--long")
-                    .arg("--abbrev=1000")
-                    .arg("--dirty")
+                    .arg("rev-parse")
+                    .arg("HEAD")
                     .output()
                     .map(|o| o.stdout)
                 {
@@ -125,8 +127,30 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
                             "cargo:warning=Error getting git revision from {current_dir:?}: {e:?}"
                         )?;
                     }
-                    Ok(git_describe) => {
-                        git_sha = str::from_utf8(&git_describe).ok().map(str::to_string);
+                    Ok(rev_parse) => {
+                        let sha = str::from_utf8(&rev_parse)
+                            .ok()
+                            .map(|s| s.trim().to_string());
+                        if let Some(sha) = sha.filter(|s| !s.is_empty()) {
+                            let dirty = match Command::new("git")
+                                .current_dir(current_dir)
+                                .arg("status")
+                                .arg("--porcelain")
+                                .arg("--untracked-files=normal")
+                                .output()
+                                .map(|o| o.stdout)
+                            {
+                                Ok(status) => !status.is_empty(),
+                                Err(e) => {
+                                    writeln!(
+                                        w,
+                                        "cargo:warning=Error checking git dirty status from {current_dir:?}, marking as dirty: {e:?}"
+                                    )?;
+                                    true
+                                }
+                            };
+                            git_sha = Some(if dirty { format!("{sha}-dirty") } else { sha });
+                        }
                     }
                 }
             }

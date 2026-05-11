@@ -104,8 +104,7 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
     // Read the git revision from the git repository containing the code being
     // built.
     if git_sha.is_none() {
-        match Command::new("git")
-            .current_dir(current_dir)
+        match git(current_dir)
             .arg("rev-parse")
             .arg("--git-dir")
             .output()
@@ -136,8 +135,7 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
                 writeln!(w, "cargo:rerun-if-changed={git_dir}/HEAD")?;
                 writeln!(w, "cargo:rerun-if-changed={git_dir}/refs")?;
 
-                match Command::new("git")
-                    .current_dir(current_dir)
+                match git(current_dir)
                     .arg("rev-parse")
                     .arg("HEAD")
                     .output()
@@ -154,8 +152,7 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
                             .ok()
                             .map(|s| s.trim().to_string());
                         if let Some(sha) = sha.filter(|s| !s.is_empty()) {
-                            let dirty = match Command::new("git")
-                                .current_dir(current_dir)
+                            let dirty = match git(current_dir)
                                 .arg("status")
                                 .arg("--porcelain")
                                 .arg("--untracked-files=no")
@@ -184,6 +181,24 @@ fn __init(w: &mut impl std::io::Write, current_dir: &Path) -> std::io::Result<()
     }
 
     Ok(())
+}
+
+// Build a `git` Command that ignores ambient path-redirecting GIT_* env vars,
+// so that the recorded revision is always for the repository at current_dir
+// and not whatever an outer process (e.g. `git rebase --exec cargo ...`) has
+// pointed git at. Mirrors the sanitization cargo applies in fetch_with_cli.
+fn git(current_dir: &Path) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(current_dir);
+    cmd.env_remove("GIT_DIR");
+    cmd.env_remove("GIT_WORK_TREE");
+    cmd.env_remove("GIT_INDEX_FILE");
+    cmd.env_remove("GIT_OBJECT_DIRECTORY");
+    cmd.env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES");
+    // Disable terminal prompts so a misconfigured credential or hook can't
+    // hang a non-interactive build (e.g. CI) indefinitely.
+    cmd.env("GIT_TERMINAL_PROMPT", "0");
+    cmd
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Default)]
